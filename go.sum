@@ -32,8 +32,12 @@ github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.7 h1:X+2YciYSxvMQK0UZ7sg45ZVabVZ
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.7/go.mod h1:lW34nIZuQ8UDPdkon5fmfp2l3+ZkQ2me/+oecHYLOII=
 github.com/invenlore/core v0.2.4 h1:9RfqN/M0ShtGAMYO0hf4//XwdNmgj+mvDRaq8RafVhc=
 github.com/invenlore/core v0.2.4/go.mod h1:GoJN9CtQfMpuQlJXbCpFwcdYp56Gx9bGJVd03HlrrAk=
+github.com/invenlore/core v0.2.5 h1:LYmxkquqQjnnVDUzfe2buqGV9xEZOfCSyQpuW6/FXco=
+github.com/invenlore/core v0.2.5/go.mod h1:w3P66jVF/hgsYV5zUYAZQz8gs+U9ahWuxUH+zn7W5jA=
 github.com/invenlore/proto v1.4.4 h1:w1EzRC7TXmsC+jOYKQUVf44RSvBRS+7AeVisdpmFN7Y=
 github.com/invenlore/proto v1.4.4/go.mod h1:DSu8QuRqq62BE9YlwRvy3SP8mHbnEV0xK3+ZSEujVrM=
+github.com/invenlore/proto v1.4.5 h1:zPcdr6oXy1r/TVg+9fhEWMRp9BstYMuMa4bAWVAW16s=
+github.com/invenlore/proto v1.4.5/go.mod h1:hDm2fwhSs9ZbwDJNmFA+AQAac1dkbuyX9FuP8ZHPg3w=
 github.com/klauspost/compress v1.18.3 h1:9PJRvfbmTabkOX8moIpXPbMMbYN60bWImDDU7L+/6zw=
 github.com/klauspost/compress v1.18.3/go.mod h1:R0h/fSBs8DE4ENlcrlib3PsXS61voFxhIs2DeRhCvJ4=
 github.com/leodido/go-urn v1.4.0 h1:WT9HwE9SGECu3lg4d/dIA+jxlljEa1/ffXKmRjqdmIQ=

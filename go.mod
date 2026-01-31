@@ -6,8 +6,8 @@ require (
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
-	github.com/invenlore/core v0.2.4
-	github.com/invenlore/proto v1.4.4
+	github.com/invenlore/core v0.2.5
+	github.com/invenlore/proto v1.4.5
 	github.com/sirupsen/logrus v1.9.4
 	go.mongodb.org/mongo-driver v1.17.8
 	golang.org/x/crypto v0.47.0

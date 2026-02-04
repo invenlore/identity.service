@@ -30,19 +30,34 @@ type IdentityAuthService interface {
 	Logout(ctx context.Context, req *identity_v1.LogoutRequest) (codes.Code, error)
 	GetJWKS(ctx context.Context) (*identity_v1.JWKSet, codes.Code, error)
 	EnsureActiveKey(ctx context.Context) error
+	ValidateToken(ctx context.Context, token string) (*ValidatedClaims, error)
+}
+
+type ValidatedClaims struct {
+	Subject      string
+	Roles        []string
+	PermsGlobal  []string
+	PermsProject []string
+	Scopes       []string
 }
 
 type identityAuthService struct {
 	repo       repository.IdentityAuthRepository
+	rbacRepo   repository.IdentityRBACRepository
+	rbacSvc    RBACService
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 	issuer     string
 	audience   string
 }
 
-func NewIdentityAuthService(repo repository.IdentityAuthRepository, authCfg *config.AuthConfig) IdentityAuthService {
+func NewIdentityAuthService(repo repository.IdentityAuthRepository, rbacRepo repository.IdentityRBACRepository, authCfg *config.AuthConfig) IdentityAuthService {
+	rbacSvc := NewRBACService(rbacRepo)
+
 	return &identityAuthService{
 		repo:       repo,
+		rbacRepo:   rbacRepo,
+		rbacSvc:    rbacSvc,
 		accessTTL:  authCfg.AccessTokenTTL,
 		refreshTTL: authCfg.RefreshTokenTTL,
 		issuer:     strings.TrimSpace(authCfg.JWTIssuer),
@@ -60,7 +75,6 @@ func (s *identityAuthService) Register(ctx context.Context, req *identity_v1.Reg
 	user := &domain.User{
 		Name:         strings.TrimSpace(req.Name),
 		Email:        strings.ToLower(strings.TrimSpace(req.Email)),
-		Roles:        []string{"user"},
 		PasswordHash: hashPassword(req.Password),
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -75,15 +89,27 @@ func (s *identityAuthService) Register(ctx context.Context, req *identity_v1.Reg
 		return nil, codes.Internal, err
 	}
 
+	if err := s.rbacRepo.AssignRole(ctx, id, "user", []string{}); err != nil {
+		return nil, codes.Internal, err
+	}
+
+	perms, err := s.rbacSvc.EffectivePermissions(ctx, id)
+	if err != nil {
+		return nil, codes.Internal, err
+	}
+
 	return &identity_v1.RegisterResponse{
 		Id: id.Hex(),
 		User: &identity_v1.User{
-			Id:        id.Hex(),
-			Name:      user.Name,
-			Email:     user.Email,
-			Roles:     user.Roles,
-			CreatedAt: user.CreatedAt.Unix(),
-			UpdatedAt: user.UpdatedAt.Unix(),
+			Id:           id.Hex(),
+			Name:         user.Name,
+			Email:        user.Email,
+			Roles:        perms.Roles,
+			PermsGlobal:  perms.GlobalPerms,
+			PermsProject: perms.ProjectPerms,
+			Scopes:       perms.Scopes,
+			CreatedAt:    user.CreatedAt.Unix(),
+			UpdatedAt:    user.UpdatedAt.Unix(),
 		},
 	}, codes.OK, nil
 }
@@ -106,6 +132,11 @@ func (s *identityAuthService) Login(ctx context.Context, req *identity_v1.LoginR
 		return nil, codes.Unauthenticated, fmt.Errorf("invalid credentials")
 	}
 
+	perms, err := s.rbacSvc.EffectivePermissions(ctx, user.Id)
+	if err != nil {
+		return nil, codes.Internal, err
+	}
+
 	accessToken, expiresIn, err := s.issueAccessToken(ctx, user)
 	if err != nil {
 		return nil, codes.Internal, err
@@ -123,12 +154,15 @@ func (s *identityAuthService) Login(ctx context.Context, req *identity_v1.LoginR
 		RefreshToken:     refreshToken,
 		ExpiresInSeconds: expiresIn,
 		User: &identity_v1.User{
-			Id:        user.Id.Hex(),
-			Name:      user.Name,
-			Email:     user.Email,
-			Roles:     user.Roles,
-			CreatedAt: user.CreatedAt.Unix(),
-			UpdatedAt: user.UpdatedAt.Unix(),
+			Id:           user.Id.Hex(),
+			Name:         user.Name,
+			Email:        user.Email,
+			Roles:        perms.Roles,
+			PermsGlobal:  perms.GlobalPerms,
+			PermsProject: perms.ProjectPerms,
+			Scopes:       perms.Scopes,
+			CreatedAt:    user.CreatedAt.Unix(),
+			UpdatedAt:    user.UpdatedAt.Unix(),
 		},
 	}, codes.OK, nil
 }
@@ -233,7 +267,60 @@ func (s *identityAuthService) EnsureActiveKey(ctx context.Context) error {
 	return EnsureActiveKey(ctx, s.repo)
 }
 
+func (s *identityAuthService) ValidateToken(ctx context.Context, token string) (*ValidatedClaims, error) {
+	if strings.TrimSpace(token) == "" {
+		return nil, fmt.Errorf("token is required")
+	}
+
+	keySet, err := s.repo.ListActivePublicKeys(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	keyMap := make(map[string]*rsa.PublicKey)
+	for _, key := range keySet {
+		pub, err := parseRSAPublicKey(key.PublicKeyPEM)
+		if err != nil {
+			return nil, err
+		}
+		if key.Kid != "" {
+			keyMap[key.Kid] = pub
+		}
+	}
+
+	parser := jwt.NewParser(jwt.WithAudience(s.audience), jwt.WithIssuer(s.issuer))
+	claims := jwt.MapClaims{}
+
+	_, err = parser.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
+		kid, _ := t.Header["kid"].(string)
+		if kid == "" {
+			return nil, fmt.Errorf("token kid missing")
+		}
+		key, ok := keyMap[kid]
+		if !ok {
+			return nil, fmt.Errorf("unknown kid")
+		}
+		return key, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &ValidatedClaims{
+		Subject:      claimString(claims, "sub"),
+		Roles:        claimStringSlice(claims, "roles"),
+		PermsGlobal:  claimStringSlice(claims, "perms_global"),
+		PermsProject: claimStringSlice(claims, "perms_project"),
+		Scopes:       claimStringSlice(claims, "scopes"),
+	}, nil
+}
+
 func (s *identityAuthService) issueAccessToken(ctx context.Context, user *domain.User) (string, int64, error) {
+	perms, err := s.rbacSvc.EffectivePermissions(ctx, user.Id)
+	if err != nil {
+		return "", 0, err
+	}
+
 	key, err := s.repo.FindActiveAuthKey(ctx)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -264,12 +351,15 @@ func (s *identityAuthService) issueAccessToken(ctx context.Context, user *domain
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"sub":   claims.Subject,
-		"iss":   claims.Issuer,
-		"aud":   claims.Audience,
-		"iat":   claims.IssuedAt.Unix(),
-		"exp":   claims.ExpiresAt.Unix(),
-		"roles": user.Roles,
+		"sub":           claims.Subject,
+		"iss":           claims.Issuer,
+		"aud":           claims.Audience,
+		"iat":           claims.IssuedAt.Unix(),
+		"exp":           claims.ExpiresAt.Unix(),
+		"roles":         perms.Roles,
+		"perms_global":  perms.GlobalPerms,
+		"perms_project": perms.ProjectPerms,
+		"scopes":        perms.Scopes,
 	})
 
 	if key.Kid != "" {
@@ -395,6 +485,62 @@ func parseRSAPrivateKey(pemKey string) (*rsa.PrivateKey, error) {
 	}
 
 	return x509.ParsePKCS1PrivateKey(block.Bytes)
+}
+
+func parseRSAPublicKey(pemKey string) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode([]byte(pemKey))
+	if block == nil {
+		return nil, fmt.Errorf("invalid public key")
+	}
+
+	parsedKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	rsaKey, ok := parsedKey.(*rsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("unsupported public key type")
+	}
+
+	return rsaKey, nil
+}
+
+func claimString(claims jwt.MapClaims, key string) string {
+	if claims == nil {
+		return ""
+	}
+
+	value, _ := claims[key].(string)
+	return value
+}
+
+func claimStringSlice(claims jwt.MapClaims, key string) []string {
+	if claims == nil {
+		return nil
+	}
+
+	raw, ok := claims[key]
+	if !ok || raw == nil {
+		return nil
+	}
+
+	switch typed := raw.(type) {
+	case []string:
+		return typed
+	case []any:
+		result := make([]string, 0, len(typed))
+
+		for _, item := range typed {
+			if str, ok := item.(string); ok {
+				result = append(result, str)
+			}
+		}
+
+		return result
+	default:
+		return nil
+	}
 }
 
 func buildJWKFromPEM(key *domain.AuthKey) (*identity_v1.JWK, error) {

@@ -7,7 +7,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/invenlore/core v0.2.5
-	github.com/invenlore/proto v1.4.5
+	github.com/invenlore/proto v1.4.7
 	github.com/sirupsen/logrus v1.9.4
 	go.mongodb.org/mongo-driver v1.17.8
 	golang.org/x/crypto v0.47.0
@@ -18,7 +18,7 @@ require (
 require (
 	github.com/alexliesenfeld/health v0.8.1 // indirect
 	github.com/caarlos0/env/v11 v11.3.1 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.12 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
@@ -33,7 +33,7 @@ require (
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260128011058-8636f8732409 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260128011058-8636f8732409 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260203192932-546029d2fa20 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260203192932-546029d2fa20 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )

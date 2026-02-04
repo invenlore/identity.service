@@ -15,6 +15,7 @@ import (
 
 type identityAdminService struct {
 	Repository repository.IdentityAdminRepository
+	rbacSvc    RBACService
 }
 
 type IdentityAdminService interface {
@@ -24,8 +25,11 @@ type IdentityAdminService interface {
 	ListUsers(ctx context.Context) ([]*identity_v1.User, string, codes.Code, error)
 }
 
-func NewIdentityAdminService(repository repository.IdentityAdminRepository) IdentityAdminService {
-	return &identityAdminService{Repository: repository}
+func NewIdentityAdminService(repository repository.IdentityAdminRepository, rbacRepo repository.IdentityRBACRepository) IdentityAdminService {
+	return &identityAdminService{
+		Repository: repository,
+		rbacSvc:    NewRBACService(rbacRepo),
+	}
 }
 
 func (s *identityAdminService) AddUser(ctx context.Context, u *identity_v1.User) (string, codes.Code, error) {
@@ -33,7 +37,6 @@ func (s *identityAdminService) AddUser(ctx context.Context, u *identity_v1.User)
 	lastInsertId, err := s.Repository.InsertUser(ctx, &domain.User{
 		Name:      u.Name,
 		Email:     u.Email,
-		Roles:     u.Roles,
 		CreatedAt: now,
 		UpdatedAt: now,
 	})
@@ -62,13 +65,21 @@ func (s *identityAdminService) GetUser(ctx context.Context, id string) (*identit
 		}
 	}
 
+	perms, err := s.rbacSvc.EffectivePermissions(ctx, ptrUser.Id)
+	if err != nil {
+		return nil, codes.Internal, err
+	}
+
 	return &identity_v1.User{
-		Id:        ptrUser.Id.Hex(),
-		Name:      ptrUser.Name,
-		Email:     ptrUser.Email,
-		Roles:     ptrUser.Roles,
-		CreatedAt: ptrUser.CreatedAt.Unix(),
-		UpdatedAt: ptrUser.UpdatedAt.Unix(),
+		Id:           ptrUser.Id.Hex(),
+		Name:         ptrUser.Name,
+		Email:        ptrUser.Email,
+		Roles:        perms.Roles,
+		PermsGlobal:  perms.GlobalPerms,
+		PermsProject: perms.ProjectPerms,
+		Scopes:       perms.Scopes,
+		CreatedAt:    ptrUser.CreatedAt.Unix(),
+		UpdatedAt:    ptrUser.UpdatedAt.Unix(),
 	}, codes.OK, nil
 }
 
@@ -99,13 +110,21 @@ func (s *identityAdminService) ListUsers(ctx context.Context) ([]*identity_v1.Us
 	}
 
 	for _, u := range dbUsers {
+		perms, err := s.rbacSvc.EffectivePermissions(ctx, u.Id)
+		if err != nil {
+			return nil, "", codes.Internal, err
+		}
+
 		users = append(users, &identity_v1.User{
-			Id:        u.Id.Hex(),
-			Name:      u.Name,
-			Email:     u.Email,
-			Roles:     u.Roles,
-			CreatedAt: u.CreatedAt.Unix(),
-			UpdatedAt: u.UpdatedAt.Unix(),
+			Id:           u.Id.Hex(),
+			Name:         u.Name,
+			Email:        u.Email,
+			Roles:        perms.Roles,
+			PermsGlobal:  perms.GlobalPerms,
+			PermsProject: perms.ProjectPerms,
+			Scopes:       perms.Scopes,
+			CreatedAt:    u.CreatedAt.Unix(),
+			UpdatedAt:    u.UpdatedAt.Unix(),
 		})
 	}
 

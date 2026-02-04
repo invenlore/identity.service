@@ -99,7 +99,6 @@ var (
 			col := db.Collection("users")
 			update := bson.M{
 				"$set": bson.M{
-					"roles":      bson.A{},
 					"created_at": time.Now().UTC(),
 					"updated_at": time.Now().UTC(),
 				},

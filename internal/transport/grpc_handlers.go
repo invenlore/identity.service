@@ -6,8 +6,10 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/invenlore/core/pkg/errmodel"
+	"github.com/invenlore/identity.service/internal/service"
 	common_v1 "github.com/invenlore/proto/pkg/common/v1"
 	identity_v1 "github.com/invenlore/proto/pkg/identity/v1"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 )
@@ -94,12 +96,45 @@ func (s *GRPCIdentityServer) GetJWKS(ctx context.Context, req *identity_v1.GetJW
 
 // INTERNAL SCOPE
 func (s *GRPCIdentityServer) ValidateToken(ctx context.Context, req *identity_v1.ValidateTokenRequest) (*identity_v1.ValidateTokenResponse, error) {
-	return nil, errmodel.Error(ctx, codes.Unimplemented, "validate token is not implemented")
+	if req == nil || strings.TrimSpace(req.Token) == "" {
+		return nil, errmodel.BadRequest(ctx, "token is required", errmodel.FieldViolation("token", "token is required"))
+	}
+
+	claims, err := s.authSvc.ValidateToken(ctx, strings.TrimSpace(req.Token))
+	if err != nil {
+		return nil, errmodel.Error(ctx, codes.Unauthenticated, err.Error())
+	}
+
+	return &identity_v1.ValidateTokenResponse{
+		Id:           claims.Subject,
+		Roles:        claims.Roles,
+		PermsGlobal:  claims.PermsGlobal,
+		PermsProject: claims.PermsProject,
+		Scopes:       claims.Scopes,
+	}, nil
 }
 
 // INTERNAL SCOPE
 func (s *GRPCIdentityServer) Authorize(ctx context.Context, req *identity_v1.AuthorizeRequest) (*identity_v1.AuthorizeResponse, error) {
-	return nil, errmodel.Error(ctx, codes.Unimplemented, "authorize is not implemented")
+	if req == nil || strings.TrimSpace(req.Id) == "" || strings.TrimSpace(req.Action) == "" {
+		return nil, errmodel.BadRequest(ctx, "id and action are required", errmodel.FieldViolation("id", "id and action are required"))
+	}
+
+	userID, err := primitive.ObjectIDFromHex(strings.TrimSpace(req.Id))
+	if err != nil {
+		return nil, errmodel.BadRequest(ctx, "invalid user id", errmodel.FieldViolation("id", err.Error()))
+	}
+
+	if err := service.ValidateResource(req.Resource); err != nil {
+		return nil, errmodel.BadRequest(ctx, "invalid resource", errmodel.FieldViolation("resource", err.Error()))
+	}
+
+	allowed, err := s.rbacSvc.Authorize(ctx, userID, strings.TrimSpace(req.Action), strings.TrimSpace(req.Resource))
+	if err != nil {
+		return nil, errmodel.Error(ctx, codes.Internal, err.Error())
+	}
+
+	return &identity_v1.AuthorizeResponse{Allowed: allowed}, nil
 }
 
 // INTERNAL SCOPE

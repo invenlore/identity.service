@@ -2,6 +2,8 @@
 
 FROM golang:1.24.12 AS builder
 
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates
+
 ARG CGO_ENABLED=0
 WORKDIR /app
 
@@ -13,6 +15,8 @@ RUN --mount=type=cache,target=/root/.cache/go-build go mod download
 RUN --mount=type=cache,target=/root/.cache/go-build go build -o ./bin/service
 
 FROM scratch
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 WORKDIR /app
 

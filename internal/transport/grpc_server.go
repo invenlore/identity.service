@@ -17,22 +17,24 @@ import (
 type GRPCIdentityServer struct {
 	adminSvc       service.IdentityAdminService
 	authSvc        service.IdentityAuthService
+	oauthSvc       service.IdentityOAuthService
 	rbacSvc        service.RBACService
 	mongoReadiness *db.MongoReadiness
 	identity_v1.UnimplementedIdentityPublicServiceServer
 	identity_v1.UnimplementedIdentityInternalServiceServer
 }
 
-func NewGRPCIdentityServer(adminSvc service.IdentityAdminService, authSvc service.IdentityAuthService, rbacSvc service.RBACService, mongoReadiness *db.MongoReadiness) *GRPCIdentityServer {
+func NewGRPCIdentityServer(adminSvc service.IdentityAdminService, authSvc service.IdentityAuthService, oauthSvc service.IdentityOAuthService, rbacSvc service.RBACService, mongoReadiness *db.MongoReadiness) *GRPCIdentityServer {
 	return &GRPCIdentityServer{
 		adminSvc:       adminSvc,
 		authSvc:        authSvc,
+		oauthSvc:       oauthSvc,
 		rbacSvc:        rbacSvc,
 		mongoReadiness: mongoReadiness,
 	}
 }
 
-func StartGRPCServer(cfg *config.GRPCServerConfig, adminSvc service.IdentityAdminService, authSvc service.IdentityAuthService, rbacSvc service.RBACService, mongoReadiness *db.MongoReadiness) (*grpc.Server, net.Listener, error) {
+func StartGRPCServer(cfg *config.GRPCServerConfig, adminSvc service.IdentityAdminService, authSvc service.IdentityAuthService, oauthSvc service.IdentityOAuthService, rbacSvc service.RBACService, mongoReadiness *db.MongoReadiness) (*grpc.Server, net.Listener, error) {
 	var (
 		loggerEntry = logrus.WithField("scope", "grpcServer")
 		listenAddr  = net.JoinHostPort(cfg.Host, cfg.Port)
@@ -64,7 +66,7 @@ func StartGRPCServer(cfg *config.GRPCServerConfig, adminSvc service.IdentityAdmi
 		grpc.ChainStreamInterceptor(streamInterceptors...),
 	)
 
-	grpcServer := NewGRPCIdentityServer(adminSvc, authSvc, rbacSvc, mongoReadiness)
+	grpcServer := NewGRPCIdentityServer(adminSvc, authSvc, oauthSvc, rbacSvc, mongoReadiness)
 	identity_v1.RegisterIdentityPublicServiceServer(server, grpcServer)
 	identity_v1.RegisterIdentityInternalServiceServer(server, grpcServer)
 

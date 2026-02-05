@@ -31,6 +31,7 @@ type IdentityAuthService interface {
 	GetJWKS(ctx context.Context) (*identity_v1.JWKSet, codes.Code, error)
 	EnsureActiveKey(ctx context.Context) error
 	ValidateToken(ctx context.Context, token string) (*ValidatedClaims, error)
+	IssueTokensForUser(ctx context.Context, user *domain.User, userAgent, ip string) (string, string, int64, error)
 }
 
 type ValidatedClaims struct {
@@ -313,6 +314,24 @@ func (s *identityAuthService) ValidateToken(ctx context.Context, token string) (
 		PermsProject: claimStringSlice(claims, "perms_project"),
 		Scopes:       claimStringSlice(claims, "scopes"),
 	}, nil
+}
+
+func (s *identityAuthService) IssueTokensForUser(ctx context.Context, user *domain.User, userAgent, ip string) (string, string, int64, error) {
+	if user == nil {
+		return "", "", 0, fmt.Errorf("user is required")
+	}
+
+	accessToken, expiresIn, err := s.issueAccessToken(ctx, user)
+	if err != nil {
+		return "", "", 0, err
+	}
+
+	refreshToken, _, err := s.issueRefreshSession(ctx, user, userAgent, ip)
+	if err != nil {
+		return "", "", 0, err
+	}
+
+	return accessToken, refreshToken, expiresIn, nil
 }
 
 func (s *identityAuthService) issueAccessToken(ctx context.Context, user *domain.User) (string, int64, error) {

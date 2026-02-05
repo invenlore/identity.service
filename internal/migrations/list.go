@@ -19,5 +19,9 @@ func List() []migrator.Migration {
 		Migration_20260204_UserRolesCollection_1,
 		Migration_20260204_UserRolesIndexes_1,
 		Migration_20260204_RolesSeed_1,
+		Migration_20260205_OAuthStatesCollection_1,
+		Migration_20260205_OAuthStatesIndexes_1,
+		Migration_20260205_OAuthIdentitiesCollection_1,
+		Migration_20260205_OAuthIdentitiesIndexes_1,
 	}
 }

@@ -32,6 +32,34 @@ func (s *GRPCIdentityServer) Register(ctx context.Context, req *identity_v1.Regi
 }
 
 // PUBLIC SCOPE
+func (s *GRPCIdentityServer) StartOAuth(ctx context.Context, req *identity_v1.StartOAuthRequest) (*identity_v1.StartOAuthResponse, error) {
+	if req == nil {
+		return nil, errmodel.BadRequest(ctx, "request is required", errmodel.FieldViolation("request", "request is required"))
+	}
+
+	resp, code, err := s.oauthSvc.StartOAuth(ctx, req.Provider, strings.TrimSpace(req.RedirectUri))
+	if err != nil {
+		return nil, errmodel.Error(ctx, code, err.Error())
+	}
+
+	return resp, nil
+}
+
+// PUBLIC SCOPE
+func (s *GRPCIdentityServer) CompleteOAuth(ctx context.Context, req *identity_v1.CompleteOAuthRequest) (*identity_v1.CompleteOAuthResponse, error) {
+	if req == nil {
+		return nil, errmodel.BadRequest(ctx, "request is required", errmodel.FieldViolation("request", "request is required"))
+	}
+
+	resp, code, err := s.oauthSvc.CompleteOAuth(ctx, req.Provider, strings.TrimSpace(req.Code), strings.TrimSpace(req.State), userAgentFromContext(ctx), ipFromContext(ctx))
+	if err != nil {
+		return nil, errmodel.Error(ctx, code, err.Error())
+	}
+
+	return resp, nil
+}
+
+// PUBLIC SCOPE
 func (s *GRPCIdentityServer) Login(ctx context.Context, req *identity_v1.LoginRequest) (*identity_v1.LoginResponse, error) {
 	resp, code, err := s.authSvc.Login(ctx, req, userAgentFromContext(ctx), ipFromContext(ctx))
 	if err != nil {

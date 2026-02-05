@@ -98,9 +98,11 @@ func Start() {
 
 	adminRepo := repository.NewIdentityAdminRepository(mongoClient, mongoCfg)
 	authRepo := repository.NewIdentityAuthRepository(mongoClient, mongoCfg)
+	oauthRepo := repository.NewIdentityOAuthRepository(mongoClient, mongoCfg)
 	rbacRepo := repository.NewIdentityRBACRepository(mongoClient, mongoCfg)
 	adminSvc := service.NewIdentityAdminService(adminRepo, rbacRepo)
 	authSvc := service.NewIdentityAuthService(authRepo, rbacRepo, authCfg)
+	oauthSvc := service.NewIdentityOAuthService(authRepo, oauthRepo, rbacRepo, authSvc, appCfg.GetOAuthConfig(), appCfg.AppEnv)
 	rbacSvc := service.NewRBACService(rbacRepo)
 
 	authKeyRotator := service.NewAuthKeyRotator(
@@ -114,7 +116,7 @@ func Start() {
 		logrus.WithField("scope", "auth-key-rotation"),
 	)
 
-	grpcSrv, grpcLn, err := transport.StartGRPCServer(appCfg.GetGRPCConfig(), adminSvc, authSvc, rbacSvc, mongoReadiness)
+	grpcSrv, grpcLn, err := transport.StartGRPCServer(appCfg.GetGRPCConfig(), adminSvc, authSvc, oauthSvc, rbacSvc, mongoReadiness)
 	if err != nil {
 		loggerEntry.Fatalf("gRPC server init failed: %v", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/invenlore/core/pkg/config"
 	"github.com/invenlore/core/pkg/db"
 	"github.com/invenlore/core/pkg/logger"
+	"github.com/invenlore/core/pkg/metrics"
 	"github.com/invenlore/core/pkg/recovery"
 	"github.com/invenlore/identity.service/internal/service"
 	identity_v1 "github.com/invenlore/proto/pkg/identity/v1"
@@ -20,6 +21,7 @@ type GRPCIdentityServer struct {
 	oauthSvc       service.IdentityOAuthService
 	rbacSvc        service.RBACService
 	mongoReadiness *db.MongoReadiness
+
 	identity_v1.UnimplementedIdentityPublicServiceServer
 	identity_v1.UnimplementedIdentityInternalServiceServer
 }
@@ -34,7 +36,7 @@ func NewGRPCIdentityServer(adminSvc service.IdentityAdminService, authSvc servic
 	}
 }
 
-func StartGRPCServer(cfg *config.GRPCServerConfig, adminSvc service.IdentityAdminService, authSvc service.IdentityAuthService, oauthSvc service.IdentityOAuthService, rbacSvc service.RBACService, mongoReadiness *db.MongoReadiness) (*grpc.Server, net.Listener, error) {
+func StartGRPCServer(cfg *config.GRPCServerConfig, adminSvc service.IdentityAdminService, authSvc service.IdentityAuthService, oauthSvc service.IdentityOAuthService, rbacSvc service.RBACService, mongoReadiness *db.MongoReadiness, grpcMetrics *metrics.GRPCServerMetrics) (*grpc.Server, net.Listener, error) {
 	var (
 		loggerEntry = logrus.WithField("scope", "grpcServer")
 		listenAddr  = net.JoinHostPort(cfg.Host, cfg.Port)
@@ -51,6 +53,7 @@ func StartGRPCServer(cfg *config.GRPCServerConfig, adminSvc service.IdentityAdmi
 		recovery.RecoveryUnaryInterceptor,
 		logger.ServerRequestIDInterceptor,
 		logger.ServerLoggingInterceptor,
+		grpcMetrics.UnaryServerInterceptor(),
 		db.MongoGateUnary(mongoReadiness, identity_v1.IdentityInternalService_HealthCheck_FullMethodName),
 	}
 
@@ -58,6 +61,7 @@ func StartGRPCServer(cfg *config.GRPCServerConfig, adminSvc service.IdentityAdmi
 		recovery.RecoveryStreamInterceptor,
 		logger.ServerStreamRequestIDInterceptor,
 		logger.ServerStreamLoggingInterceptor,
+		grpcMetrics.StreamServerInterceptor(),
 		db.MongoGateStream(mongoReadiness, identity_v1.IdentityInternalService_HealthCheck_FullMethodName),
 	}
 

@@ -12,12 +12,14 @@ import (
 
 	"github.com/invenlore/core/pkg/config"
 	"github.com/invenlore/core/pkg/db"
+	"github.com/invenlore/core/pkg/metrics"
 	"github.com/invenlore/core/pkg/migrator"
 	"github.com/invenlore/identity.service/internal/migrations"
 	"github.com/invenlore/identity.service/internal/repository"
 	"github.com/invenlore/identity.service/internal/service"
 	"github.com/invenlore/identity.service/internal/transport"
 	"github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 )
@@ -40,7 +42,28 @@ func Start() {
 
 	g, ctx := errgroup.WithContext(baseCtx)
 
-	mongoClient, err := db.MongoDBConnect(ctx, mongoCfg)
+	serviceName := appCfg.ServiceName
+	if serviceName == "" {
+		serviceName = "identity"
+	}
+
+	serviceVersion := appCfg.ServiceVersion
+	if serviceVersion == "" {
+		serviceVersion = "unknown"
+	}
+
+	loggerEntry.WithFields(logrus.Fields{
+		"service": serviceName,
+		"version": serviceVersion,
+		"env":     appCfg.AppEnv,
+	}).Info("service configuration loaded")
+
+	metricsRegistry := metrics.NewRegistry(serviceName, appCfg.AppEnv, serviceVersion)
+	mongoMetrics := metrics.NewMongoMetrics(metricsRegistry)
+	readinessMetrics := metrics.NewReadinessGauge(metricsRegistry)
+	grpcMetrics := metrics.NewGRPCServerMetrics(metricsRegistry)
+
+	mongoClient, err := db.MongoDBConnect(ctx, mongoCfg, options.Client().SetMonitor(mongoMetrics.Monitor()))
 	if err != nil {
 		loggerEntry.Fatalf("MongoDB connect failed: %v", err)
 	}
@@ -49,11 +72,21 @@ func Start() {
 
 	mongoReadiness := db.NewMongoReadiness(mongoClient, mongoCfg.HealthCheckTimeout)
 	mongoReadiness.CloseGate("MongoDB migrations in progress")
+	readinessMetrics.Set("mongo", mongoReadiness.Ready())
 
 	g.Go(func() error {
-		mongoReadiness.Run(ctx, mongoCfg.HealthCheckInterval)
+		ticker := time.NewTicker(mongoCfg.HealthCheckInterval)
+		defer ticker.Stop()
 
-		return nil
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-ticker.C:
+				_ = mongoReadiness.CheckNow(ctx)
+				readinessMetrics.Set("mongo", mongoReadiness.Ready())
+			}
+		}
 	})
 
 	host, _ := os.Hostname()
@@ -74,15 +107,19 @@ func Start() {
 		if err := mgr.Run(ctx, migrations.List()); err != nil {
 			loggerEntry.Errorf("MongoDB migrations failed, keeping service in degraded mode: %v", err)
 			mongoReadiness.CloseGate("MongoDB migrations failed: " + err.Error())
+			readinessMetrics.Set("mongo", mongoReadiness.Ready())
 
 			return nil
 		}
 
 		mongoReadiness.OpenGate()
+		readinessMetrics.Set("mongo", mongoReadiness.Ready())
 
 		if err := mongoReadiness.CheckNow(ctx); err != nil {
 			loggerEntry.Warnf("MongoDB readiness check after migrations failed: %v", err)
 		}
+
+		readinessMetrics.Set("mongo", mongoReadiness.Ready())
 
 		return nil
 	})
@@ -116,9 +153,18 @@ func Start() {
 		logrus.WithField("scope", "auth-key-rotation"),
 	)
 
-	grpcSrv, grpcLn, err := transport.StartGRPCServer(appCfg.GetGRPCConfig(), adminSvc, authSvc, oauthSvc, rbacSvc, mongoReadiness)
+	grpcSrv, grpcLn, err := transport.StartGRPCServer(appCfg.GetGRPCConfig(), adminSvc, authSvc, oauthSvc, rbacSvc, mongoReadiness, grpcMetrics)
 	if err != nil {
 		loggerEntry.Fatalf("gRPC server init failed: %v", err)
+	}
+
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("GET /metrics", metricsRegistry.Handler())
+
+	metricsSrv, metricsLn, err := metrics.StartMetricsServer(appCfg.GetMetricsConfig(), metricsMux)
+	if err != nil {
+		_ = grpcLn.Close()
+		loggerEntry.Fatalf("metrics server init failed: %v", err)
 	}
 
 	healthSrv, healthLn, err := transport.StartHealthServer(appCfg.GetHealthConfig())
@@ -149,6 +195,16 @@ func Start() {
 	})
 
 	g.Go(func() error {
+		loggerEntry.Infof("metrics server serving on %s...", metricsSrv.Addr)
+
+		if err := metricsSrv.Serve(metricsLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("metrics serve failed: %w", err)
+		}
+
+		return nil
+	})
+
+	g.Go(func() error {
 		ticker := time.NewTicker(authCfg.KeyRotationTickInterval)
 		defer ticker.Stop()
 
@@ -172,6 +228,7 @@ func Start() {
 
 		grpcSrv.GracefulStop()
 		_ = healthSrv.Shutdown(stopCtx)
+		_ = metricsSrv.Shutdown(stopCtx)
 
 		loggerEntry.Info("clean service shutdown complete")
 		return nil

@@ -72,6 +72,11 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
+          build-args: |
+            SERVICE_VERSION=${{ github.event.release.tag_name }}
+          labels: |
+            org.opencontainers.image.version=${{ github.event.release.tag_name }}
+            org.opencontainers.image.revision=${{ github.sha }}
           tags: |
             invenlore/invenlore-identity-service:master
             invenlore/invenlore-identity-service:${{ github.event.release.tag_name }}

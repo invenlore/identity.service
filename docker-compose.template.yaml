@@ -11,8 +11,11 @@ services:
     environment:
       - APP_ENV=dev
       - APP_LOG_LEVEL=DEBUG
+      - SERVICE_NAME=identity
+      - SERVICE_VERSION=dev
       - GRPC_PORT=8080
       - HEALTH_PORT=80
+      - METRICS_PORT=9090
       - MONGO_URI=mongodb://root:rootpass@mongodb:27017/?authSource=admin&directConnection=true
       - MONGO_DATABASE_NAME=invenlore-identity-service-db
       - MONGO_HEALTHCHECK_TIMEOUT=2s

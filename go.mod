@@ -6,13 +6,13 @@ require (
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
-	github.com/invenlore/core v0.3.1
+	github.com/invenlore/core v0.3.2
 	github.com/invenlore/proto v1.4.8
-	github.com/prometheus/client_golang v1.23.2
+	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/sirupsen/logrus v1.9.4
 	go.mongodb.org/mongo-driver v1.17.9
 	golang.org/x/crypto v0.47.0
-	golang.org/x/oauth2 v0.34.0
+	golang.org/x/oauth2 v0.35.0
 	golang.org/x/sync v0.19.0
 	google.golang.org/grpc v1.78.0
 )
@@ -40,7 +40,7 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	golang.org/x/net v0.49.0 // indirect
-	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260203192932-546029d2fa20 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260203192932-546029d2fa20 // indirect

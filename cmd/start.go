@@ -12,6 +12,7 @@ import (
 
 	"github.com/invenlore/core/pkg/config"
 	"github.com/invenlore/core/pkg/db"
+	corelogger "github.com/invenlore/core/pkg/logger"
 	"github.com/invenlore/core/pkg/metrics"
 	"github.com/invenlore/core/pkg/migrator"
 	"github.com/invenlore/identity.service/internal/migrations"
@@ -25,6 +26,8 @@ import (
 )
 
 func Start() {
+	corelogger.InitEarlyFromEnv()
+
 	loggerEntry := logrus.WithField("scope", "service")
 	loggerEntry.Info("service starting...")
 

@@ -102,12 +102,17 @@ func (s *identityOAuthService) CompleteOAuth(ctx context.Context, provider ident
 		return nil, codes.InvalidArgument, fmt.Errorf("code and state are required")
 	}
 
-	stored, err := s.oauthRepo.ConsumeState(ctx, strings.TrimSpace(state))
+	stored, err := s.oauthRepo.GetState(ctx, strings.TrimSpace(state))
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, codes.Unauthenticated, fmt.Errorf("state invalid or expired")
 		}
+
 		return nil, codes.Internal, err
+	}
+
+	if stored.ConsumedAt != nil {
+		return nil, codes.Unauthenticated, fmt.Errorf("state already used")
 	}
 
 	if stored.Provider != providerName {
@@ -152,6 +157,10 @@ func (s *identityOAuthService) CompleteOAuth(ctx context.Context, provider ident
 
 	accessToken, refreshToken, expiresIn, err := s.authSvc.IssueTokensForUser(ctx, user, userAgent, ip)
 	if err != nil {
+		return nil, codes.Internal, err
+	}
+
+	if err := s.oauthRepo.MarkStateConsumed(ctx, stored.State); err != nil {
 		return nil, codes.Internal, err
 	}
 

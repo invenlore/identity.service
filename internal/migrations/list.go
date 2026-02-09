@@ -23,5 +23,6 @@ func List() []migrator.Migration {
 		Migration_20260205_OAuthStatesIndexes_1,
 		Migration_20260205_OAuthIdentitiesCollection_1,
 		Migration_20260205_OAuthIdentitiesIndexes_1,
+		Migration_20260210_OAuthStatesConsumedAtIndex_1,
 	}
 }

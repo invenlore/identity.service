@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/invenlore/core/pkg/config"
 	"github.com/invenlore/identity.service/internal/domain"
@@ -13,7 +14,8 @@ import (
 
 type IdentityOAuthRepository interface {
 	SaveState(ctx context.Context, state *domain.OAuthState) error
-	ConsumeState(ctx context.Context, state string) (*domain.OAuthState, error)
+	GetState(ctx context.Context, state string) (*domain.OAuthState, error)
+	MarkStateConsumed(ctx context.Context, state string) error
 	FindOAuthIdentity(ctx context.Context, provider, providerUserID string) (*domain.OAuthIdentity, error)
 	UpsertOAuthIdentity(ctx context.Context, identity *domain.OAuthIdentity) error
 }
@@ -42,7 +44,7 @@ func (r *identityOAuthRepository) SaveState(ctx context.Context, state *domain.O
 	return err
 }
 
-func (r *identityOAuthRepository) ConsumeState(ctx context.Context, state string) (*domain.OAuthState, error) {
+func (r *identityOAuthRepository) GetState(ctx context.Context, state string) (*domain.OAuthState, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.cfg.OperationTimeout)
 	defer cancel()
 
@@ -53,12 +55,33 @@ func (r *identityOAuthRepository) ConsumeState(ctx context.Context, state string
 	filter := bson.M{"state": state}
 	var result domain.OAuthState
 
-	err := r.statesCol.FindOneAndDelete(ctx, filter).Decode(&result)
+	err := r.statesCol.FindOne(ctx, filter).Decode(&result)
 	if err != nil {
 		return nil, err
 	}
 
 	return &result, nil
+}
+
+func (r *identityOAuthRepository) MarkStateConsumed(ctx context.Context, state string) error {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.OperationTimeout)
+	defer cancel()
+
+	if strings.TrimSpace(state) == "" {
+		return nil
+	}
+
+	now := time.Now().UTC()
+
+	filter := bson.M{"state": state}
+	update := bson.M{
+		"$set": bson.M{
+			"consumed_at": now,
+		},
+	}
+
+	_, err := r.statesCol.UpdateOne(ctx, filter, update)
+	return err
 }
 
 func (r *identityOAuthRepository) FindOAuthIdentity(ctx context.Context, provider, providerUserID string) (*domain.OAuthIdentity, error) {

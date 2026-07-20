@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.24.13 AS builder
+FROM golang:1.26.5-alpine3.23 AS builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && update-ca-certificates
+RUN apk add --no-cache ca-certificates
 
 ARG CGO_ENABLED=0
 ARG SERVICE_VERSION=unknown

@@ -41,7 +41,7 @@ jobs:
         continue-on-error: true
         with:
           command: cves
-          image: golang:1.24.12
+          image: golang:1.26.5-alpine3.23
           platform: linux/amd64
           only-severities: high,critical
           summary: true

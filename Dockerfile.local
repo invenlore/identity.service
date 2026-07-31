@@ -5,25 +5,41 @@ FROM golang:1.26.5-alpine3.23 AS builder
 RUN apk add --no-cache ca-certificates
 
 ARG CGO_ENABLED=0
-ARG SERVICE_VERSION=unknown
+ARG SERVICE_VERSION=local-workspace
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 
-ENV GOTOOLCHAIN=local \
-    GOWORK=off
+ENV GOTOOLCHAIN=local
 
-WORKDIR /src/service
+WORKDIR /src
 
-COPY go.mod go.sum ./
+COPY go.mod go.sum ./service/
+COPY --from=core go.mod go.sum ./core/
+COPY --from=proto go.mod go.sum ./proto/
+
+RUN go work init ./service ./core ./proto
+
+ENV GOWORK=/src/go.work
 
 RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
-    go mod download
+    cd /src/service && go mod download
 
-COPY . .
+COPY . ./service/
+COPY --from=core . ./core/
+COPY --from=proto . ./proto/
+
+RUN cd /src/service && \
+    core_dir="$(go list -m -f '{{.Dir}}' github.com/invenlore/core)" && \
+    proto_dir="$(go list -m -f '{{.Dir}}' github.com/invenlore/proto)" && \
+    printf "local module github.com/invenlore/core -> %s\n" "$core_dir" && \
+    printf "local module github.com/invenlore/proto -> %s\n" "$proto_dir" && \
+    test "$core_dir" = "/src/core" && \
+    test "$proto_dir" = "/src/proto"
 
 RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
     mkdir -p /out && \
+    cd /src/service && \
     CGO_ENABLED="$CGO_ENABLED" GOOS="$TARGETOS" GOARCH="$TARGETARCH" \
     go build -mod=readonly -trimpath -buildvcs=false -o /out/service .
 
@@ -40,7 +56,6 @@ COPY --from=builder /out/version.txt ./version.txt
 
 COPY --from=ghcr.io/tarampampam/microcheck:1 /bin/httpcheck /bin/httpcheck
 
-# non-root user
 USER 65532:65532
 
 HEALTHCHECK --interval=1m --timeout=5s --start-period=10s --retries=3 CMD ["/bin/httpcheck", "--port-env=HEALTH_PORT", "http://localhost/health"]

@@ -2,7 +2,16 @@ services:
   identity-service:
     build:
       context: .
-    image: invenlore/invenlore-identity-service
+      dockerfile: Dockerfile.local
+      additional_contexts:
+        core: ../core
+        proto: ../proto
+      args:
+        SERVICE_VERSION: local-workspace
+      platforms:
+        - linux/amd64
+    image: invenlore-identity-service:local
+    pull_policy: build
     networks:
       - invenlore-network
     ports:
@@ -12,11 +21,11 @@ services:
       - APP_ENV=dev
       - APP_LOG_LEVEL=DEBUG
       - SERVICE_NAME=identity
-      - SERVICE_VERSION=dev
+      - SERVICE_VERSION=local-workspace
       - GRPC_PORT=8080
       - HEALTH_PORT=8081
       - METRICS_PORT=9090
-      - MONGO_URI=mongodb://root:rootpass@mongodb:27017/?authSource=admin&directConnection=true
+      - MONGO_URI=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/?authSource=admin&directConnection=true
       - MONGO_DATABASE_NAME=invenlore-identity-service-db
       - MONGO_HEALTHCHECK_TIMEOUT=2s
       - MONGO_HEALTHCHECK_INTERVAL=10s
@@ -35,8 +44,8 @@ services:
     ports:
       - "27017:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: rootpass
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
       MONGO_INITDB_DATABASE: invenlore-identity-service-db
     volumes:
       - mongo_data:/data/db

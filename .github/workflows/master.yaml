@@ -31,10 +31,25 @@ jobs:
           path: go-build-cache
           key: ${{ runner.os }}-go-build-cache-${{ hashFiles('**/go.sum') }}
 
+      - name: setup go module cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: go-mod-cache
+          key: ${{ runner.os }}-go-mod-cache-${{ hashFiles('**/go.sum') }}
+
       - name: inject go-build-cache
         uses: reproducible-containers/buildkit-cache-dance@a7e6c84254deea63f27ad452032d8fdd4815301a # v2
         with:
           cache-source: go-build-cache
+          cache-target: /root/.cache/go-build
+          scratch-dir: scratch-go-build
+
+      - name: inject go-mod-cache
+        uses: reproducible-containers/buildkit-cache-dance@a7e6c84254deea63f27ad452032d8fdd4815301a # v2
+        with:
+          cache-source: go-mod-cache
+          cache-target: /go/pkg/mod
+          scratch-dir: scratch-go-mod
 
       - name: cve scan builder base (docker scout)
         uses: docker/scout-action@f8c776824083494ab0d56b8105ba2ca85c86e4de # v1
